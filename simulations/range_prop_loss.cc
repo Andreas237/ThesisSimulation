@@ -15,6 +15,9 @@ using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE ("MyRangedPropogationLossModel");
 
+void
+LogNodeContainer(std::string, NodeContainer);
+
 
 
 
@@ -22,13 +25,27 @@ int
 main (int argc, char *argv[])
 {
 
-    uint32_t nReceivers = 4;
-    uint32_t transmitter = 1;
+    // Default values
+    uint32_t nJammer = 1;
+    uint32_t nBsr = 1;
 
-    // Create Tx node
+
+
+    // Update defaults per command line
+    CommandLine cmd;
+    cmd.AddValue("nJammers","Number of jamming nodes",nJammer);
+    cmd.AddValue("nBsr","Number of BSR nodes",nBsr);
+    cmd.Parse (argc,argv);
+
+    // Create jamming node
     // Add transmitter node to receiver network
+    NodeContainer jammer;
+    jammer.Create(nJammer);
+
 
     // Create Receiver Nodes
+    NodeContainer bsr;
+    bsr.Create(nBsr);
 
     // Set channel attributes
     // data rate
@@ -39,9 +56,11 @@ main (int argc, char *argv[])
     // Construct PHY and channel helpers
     //      -- What are appropriate helpers?
     //      -- What makes sense for my model?
-    
 
 
+
+    LogNodeContainer("jammer",jammer);
+    LogNodeContainer("bsr",bsr);
 
 
     Simulator::Run ();
@@ -51,3 +70,18 @@ main (int argc, char *argv[])
 
 
 }// end main
+
+
+
+
+
+
+
+void
+LogNodeContainer(std::string ContainerName, NodeContainer container) {
+    std::ostringstream oss;
+    oss <<
+    "Container=" << ContainerName <<
+    "\tContainer this many nodes=" << container.GetN();
+    NS_LOG_UNCOND(oss.str());
+}// end LogNodeContainer
