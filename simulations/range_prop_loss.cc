@@ -27,6 +27,9 @@ main (int argc, char *argv[])
     // Default values
     uint32_t nJammer = 1;
     uint32_t nBsr = 1;
+    int xMax = 10000;           // X-axis bound for position allocator
+    int yMax = 10000;           // Y-axis bound for position allocator
+    int zMax = 10000;           // Z-axis bound for position allocator
 
 
 
@@ -34,6 +37,9 @@ main (int argc, char *argv[])
     CommandLine cmd;
     cmd.AddValue("nJammer","Number of jamming nodes",nJammer);
     cmd.AddValue("nBsr","Number of BSR nodes",nBsr);
+    cmd.AddValue("xMax","Maximum boundary for X-axis", xMax);
+    cmd.AddValue("yMax","Maximum boundary for Y-axis", yMax);
+    cmd.AddValue("zMax","Maximum boundary for Z-axis", zMax);
     cmd.Parse (argc,argv);
 
 
@@ -83,16 +89,38 @@ main (int argc, char *argv[])
     //      -- Log movement of Jammers
     //      -- TODO: probably could use SetMobilityModel=RandomWaypoint
     MobilityHelper mobility;            // mobility model
+
+    // Gauss-Markov example from repositorio.cedia.org.ec/bitstream/123456789/960/12/T12_Mobilityenns3_vf.pdfs
+
     mobility.SetPositionAllocator("ns3::RandomDiscPositionAllocator",
-                                  "X",DoubleValue(0.0),
-                                  "Y",DoubleValue(0.0),
-                                  "Z",DoubleValue(0.0),
+                                  "X",DoubleValue(xMax),
+                                  "Y",DoubleValue(yMax),
+                                  "Z",DoubleValue(zMax),
                                   "Rho", StringValue ("ns3::UniformRandomVariable[Min=1|Max=2]"),       // don't want them taking up too much space
                                   "Theta", StringValue ("ns3::UniformRandomVariable[Min=0|Max=40]")     // 40 unit radius?
                                   );
     // Set the mobility model type
+
+    /*
     mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
-                            "Bounds", RectangleValue (Rectangle (-50, 50, -50, 50)));
+                            "Bounds", RectangleValue (Rectangle (-xMax, xMax, -yMax, yMax)));
+    */
+
+    ///*
+    mobility.SetMobilityModel ("ns3::GaussMarkovMobilityModel","Bounds",
+                            BoxValue (Box (0, xMax, 0, xMax, 0, zMax)),
+                            "TimeStep", TimeValue (Seconds (0.5)),
+                            "Alpha", DoubleValue (0.85),
+                            "MeanVelocity", StringValue ("ns3::UniformRandomVariable[Min=500|Max=1200]"),
+                            "MeanDirection", StringValue ("ns3::UniformRandomVariable[Min=0|Max=10]"),
+                            "MeanPitch", StringValue ("ns3::UniformRandomVariable[Min=0.05|Max=0.05]"),
+                            "NormalVelocity", StringValue ("ns3::NormalRandomVariable[Mean=1.0|Variance=1.0|Bound=3.0]"),
+                            "NormalDirection",StringValue ("ns3::NormalRandomVariable[Mean=0.3|Variance=0.2|Bound=0.6]"),
+                            "NormalPitch", StringValue ("ns3::NormalRandomVariable[Mean=0.0|Variance=0.02|Bound=0.04]"));
+
+    //*/
+
+
     // install the mobility model to some nodes
     mobility.Install(jammerNodes);
 
@@ -110,7 +138,7 @@ main (int argc, char *argv[])
 
     // log the movement of the nodes!  (Same as with third.cc)
     std::ostringstream oss;
-    
+
     oss <<
     "/NodeList/" << jammerNodes.Get (nJammer - 1)->GetId () <<
     "/$ns3::MobilityModel/CourseChange";
