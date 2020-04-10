@@ -1,9 +1,11 @@
 #include "ns3/core-module.h"
-#include "ns3/netanim-module.h"
 #include "ns3/mobility-module.h"
+#include "ns3/netanim-module.h"
+#include "ns3/parabolic-antenna-model.h"
 #include "ns3/propagation-loss-model.h"
 #include "ns3/spectrum-channel.h"
 #include "ns3/spectrum-helper.h"
+#include "ns3/spectrum-signal-parameters.h"
 #include "ns3/vector.h"
 
 
@@ -31,6 +33,7 @@ main (int argc, char *argv[])
     int xMax = 10000;           // X-axis bound for position allocator
     int yMax = 10000;           // Y-axis bound for position allocator
     int zMax = 10000;           // Z-axis bound for position allocator
+    double runtimeSeconds = 120;// duration of the simulation in seconds
 
 
 
@@ -42,6 +45,7 @@ main (int argc, char *argv[])
     cmd.AddValue("xMax","Maximum boundary for X-axis", xMax);
     cmd.AddValue("yMax","Maximum boundary for Y-axis", yMax);
     cmd.AddValue("zMax","Maximum boundary for Z-axis", zMax);
+    cmd.AddValue("runtime","How long to run the simulation (seconds)",runtimeSeconds);
     cmd.Parse (argc,argv);
 
 
@@ -71,7 +75,8 @@ main (int argc, char *argv[])
     // Add transmitter node to receiver network
     NodeContainer jammerNodes;
     jammerNodes.Create(nJammer);
-
+    NetDeviceContainer jammer;
+    //jammer.Get(0)->SetNode(jammerNodes.Get(0));
 
     // Create Receiver Nodes
     NodeContainer bsrNodes;
@@ -83,20 +88,55 @@ main (int argc, char *argv[])
     //      -- PathLoss Model here?
 
 
-    SpectrumChannelHelper channel = SpectrumChannelHelper::Default();
+    SpectrumChannelHelper spectrumChannelHelper = SpectrumChannelHelper::Default();
     // Propogation Loss Model https://www.nsnam.org/doxygen/classns3_1_1_log_distance_propagation_loss_model.html
-    channel.AddPropagationLoss("ns3::LogDistancePropagationLossModel",
-                                "Exponent",DoubleValue(2.5),
+    spectrumChannelHelper.AddPropagationLoss("ns3::LogDistancePropagationLossModel",
+                                "Exponent",DoubleValue(2.8),            // Per UT Dallas PDF on pathloss exponends
                                 "ReferenceDistance",DoubleValue(2),
                                 //TODO: change ReferenceLoss based on ReferenceDistance calcs from experiment data
                                 "ReferenceLoss",DoubleValue(10));
 
+
+    SpectrumPhyHelper phy;
+    // How to get NetDeviceContaineer from SpectrumChannelHelper?
+    phy.SetChannel(spectrumChannelHelper.Create ());
+    // phy.Create() needs a Node and NetDevice as input, returns Ptr<SpectrumPhy>
+    //Ptr<SpectrumPhy> phyPtr = phy.Create(jammerNodes.Get(0),jammer;
+
+    //channelParams.txPhy = phy.Create(jammerNodes.Get(0),jammer.Get(0));
     /*
-    // Per the example https://www.nsnam.org/wiki/Wireless_jamming_model#Jammer
-    // Setup the wireless channel first
-    JammerHelper jammerHelper;
-    jammerHelper.SetJammerType ("ns3::ConstantJammer");             // This is what we do
+    // channel.AddSpectrumPropagationLoss();        // TODO: Needed, but can wait
+    // channelHelper.SetPropagationDelay("1ms");    // TODO: Needed, but can wait
+
+
+
+    SpectrumSignalParameters channelParams = ns3::SpectrumSignalParameters();
+    channelParams.txPhy = phy.Create(jammerNodes.Get(0),jammer.Get(0));
+
     */
+    //ParabolicAntennaModel parabolicAntenna;
+    ParabolicAntennaModel parabolicTxAntenna;
+    parabolicTxAntenna.SetBeamwidth(60.0);         // defaul is 60
+    parabolicTxAntenna.SetOrientation(180.0);      // default is 0
+
+
+
+    // Create BandInfo as input to SpectrumModel
+    // Center freq = 12.01692 GHz, +/- 750kHz for high and low since that's the
+    // bandwidth we used for the jammer.  It should be 750/2kHz, but for now...
+    BandInfo bandInfo = {.fc=120169000000,.fh=12017670000,.fl=12016170000};
+    Bands band;
+    band.push_back(bandInfo);
+    // Create SpectrumModel as input to SpectrumValue
+    SpectrumModel spectrumModel = SpectrumModel(band);
+    Ptr<SpectrumModel> ptrSpectrumModel = &spectrumModel;
+    // Create SpectrumValue as input to SpectrumSignalParameters psd
+    SpectrumValue txPsd = SpectrumValue(ptrSpectrumModel);
+    // SpectrumSignalParameters as input to ______________
+    SpectrumSignalParameters channelParams = ns3::SpectrumSignalParameters();
+    channelParams.txAntenna = &parabolicTxAntenna;
+    //channelParams.txPhy = &phy;
+    // channelParams = (SpectrumSignalParameters){9999,,txAntenna,phy};
 
 
 
@@ -107,24 +147,28 @@ main (int argc, char *argv[])
 
 
 
-    // TODO: Create mobility model
+
+
+
+    // Mobility model
+    // Guass-Markov model has a smooth path, 3D movements, and memory of where
+    // it's been.  These are all factors that a human jammer has.  Items to model
+    // are:
     //      -- Jammer moves in spherical coordinates
     //      -- BSRs are fixed
     //      -- Log movement of Jammers
-    //      -- TODO: probably could use SetMobilityModel=RandomWaypoint
     MobilityHelper mobility;            // mobility model
 
     // Gauss-Markov example from repositorio.cedia.org.ec/bitstream/123456789/960/12/T12_Mobilityenns3_vf.pdfs
     // Position of the Jammer
     mobility.SetPositionAllocator("ns3::RandomDiscPositionAllocator",
-                                  "X",DoubleValue(xMax),
-                                  "Y",DoubleValue(yMax),
-                                  "Z",DoubleValue(zMax),
+                                  "X",DoubleValue(xMax*.8),
+                                  "Y",DoubleValue(yMax*.8),
+                                  "Z",DoubleValue(zMax*.8),
                                   "Rho", StringValue ("ns3::UniformRandomVariable[Min=1|Max=2]"),       // don't want them taking up too much space
                                   "Theta", StringValue ("ns3::UniformRandomVariable[Min=0|Max=40]")     // 40 unit radius?
                                   );
     // Set the mobility model type
-
     /*
     mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
                             "Bounds", RectangleValue (Rectangle (-xMax, xMax, -yMax, yMax)));
@@ -134,16 +178,13 @@ main (int argc, char *argv[])
     mobility.SetMobilityModel ("ns3::GaussMarkovMobilityModel","Bounds",
                             BoxValue (Box (0, xMax, 0, xMax, 0, zMax)),
                             "TimeStep", TimeValue (Seconds (0.5)),
-                            "Alpha", DoubleValue (0.85),                    // Memory
+                            "Alpha", DoubleValue (0.9),                    // Memory
                             "MeanVelocity", StringValue ("ns3::UniformRandomVariable[Min=500|Max=1200]"),
                             "MeanDirection", StringValue ("ns3::UniformRandomVariable[Min=0|Max=10]"),
                             "MeanPitch", StringValue ("ns3::UniformRandomVariable[Min=0.05|Max=0.05]"),
                             "NormalVelocity", StringValue ("ns3::NormalRandomVariable[Mean=1.0|Variance=1.0|Bound=3.0]"),
                             "NormalDirection",StringValue ("ns3::NormalRandomVariable[Mean=0.3|Variance=0.2|Bound=0.6]"),
                             "NormalPitch", StringValue ("ns3::NormalRandomVariable[Mean=0.0|Variance=0.02|Bound=0.04]"));
-
-    //*/
-
 
     // install the mobility model to some nodes
     mobility.Install(jammerNodes);
@@ -178,7 +219,7 @@ main (int argc, char *argv[])
 
 
     // Simulator stop
-    Simulator::Stop (Seconds (120.0));
+    Simulator::Stop (Seconds (runtimeSeconds));
 
 
 
