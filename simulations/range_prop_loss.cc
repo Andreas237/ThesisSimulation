@@ -1,4 +1,5 @@
 #include "ns3/core-module.h"
+#include "ns3/netanim-module.h"
 #include "ns3/mobility-module.h"
 #include "ns3/propagation-loss-model.h"
 #include "ns3/spectrum-channel.h"
@@ -35,8 +36,9 @@ main (int argc, char *argv[])
 
     // Update defaults per command line
     CommandLine cmd;
-    cmd.AddValue("nJammer","Number of jamming nodes",nJammer);
-    cmd.AddValue("nBsr","Number of BSR nodes",nBsr);
+    //***  Should only have one jammer and one receiver BSR
+    //cmd.AddValue("nJammer","Number of jamming nodes",nJammer);
+    //cmd.AddValue("nBsr","Number of BSR nodes",nBsr);
     cmd.AddValue("xMax","Maximum boundary for X-axis", xMax);
     cmd.AddValue("yMax","Maximum boundary for Y-axis", yMax);
     cmd.AddValue("zMax","Maximum boundary for Z-axis", zMax);
@@ -72,14 +74,36 @@ main (int argc, char *argv[])
 
 
     // Create Receiver Nodes
-    NodeContainer bsr;
-    bsr.Create(nBsr);
+    NodeContainer bsrNodes;
+    bsrNodes.Create(nBsr);
 
     // TODO: Construct PHY and channel helpers
     //      -- What are appropriate helpers?
     //      -- What makes sense for my model?
     //      -- PathLoss Model here?
+
+
     SpectrumChannelHelper channel = SpectrumChannelHelper::Default();
+    // Propogation Loss Model https://www.nsnam.org/doxygen/classns3_1_1_log_distance_propagation_loss_model.html
+    channel.AddPropagationLoss("ns3::LogDistancePropagationLossModel",
+                                "Exponent",DoubleValue(2.5),
+                                "ReferenceDistance",DoubleValue(2),
+                                //TODO: change ReferenceLoss based on ReferenceDistance calcs from experiment data
+                                "ReferenceLoss",DoubleValue(10));
+
+    /*
+    // Per the example https://www.nsnam.org/wiki/Wireless_jamming_model#Jammer
+    // Setup the wireless channel first
+    JammerHelper jammerHelper;
+    jammerHelper.SetJammerType ("ns3::ConstantJammer");             // This is what we do
+    */
+
+
+
+
+
+
+
 
 
 
@@ -91,7 +115,7 @@ main (int argc, char *argv[])
     MobilityHelper mobility;            // mobility model
 
     // Gauss-Markov example from repositorio.cedia.org.ec/bitstream/123456789/960/12/T12_Mobilityenns3_vf.pdfs
-
+    // Position of the Jammer
     mobility.SetPositionAllocator("ns3::RandomDiscPositionAllocator",
                                   "X",DoubleValue(xMax),
                                   "Y",DoubleValue(yMax),
@@ -110,7 +134,7 @@ main (int argc, char *argv[])
     mobility.SetMobilityModel ("ns3::GaussMarkovMobilityModel","Bounds",
                             BoxValue (Box (0, xMax, 0, xMax, 0, zMax)),
                             "TimeStep", TimeValue (Seconds (0.5)),
-                            "Alpha", DoubleValue (0.85),
+                            "Alpha", DoubleValue (0.85),                    // Memory
                             "MeanVelocity", StringValue ("ns3::UniformRandomVariable[Min=500|Max=1200]"),
                             "MeanDirection", StringValue ("ns3::UniformRandomVariable[Min=0|Max=10]"),
                             "MeanPitch", StringValue ("ns3::UniformRandomVariable[Min=0.05|Max=0.05]"),
@@ -127,29 +151,25 @@ main (int argc, char *argv[])
 
 
 
-    // Set the BSR to be fixed...
+    // Set the BSR to be fixed with a PositionAllocator
     //TODO: If multiple BSRs position them differently
-    mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-    mobility.Install (bsr);
+    Ptr<ListPositionAllocator> positionAllocS = CreateObject<ListPositionAllocator> ();
+    positionAllocS->Add(Vector((int)xMax/2, (int)yMax/2, (int)zMax/2));// node
+    MobilityHelper mobilityS;
+    mobilityS.SetPositionAllocator(positionAllocS);
+    mobilityS.SetMobilityModel("ns3::ConstantPositionMobilityModel"); //whatever it is
+    mobilityS.Install (bsrNodes);
 
 
 
 
 
-    // log the movement of the nodes!  (Same as with third.cc)
+    // log the movement of the nodes to CLI!  (Same as with third.cc)
     std::ostringstream oss;
 
     oss <<
     "/NodeList/" << jammerNodes.Get (nJammer - 1)->GetId () <<
     "/$ns3::MobilityModel/CourseChange";
-
-    /*
-    for(int i=1; i <= nJammer; i++){
-        oss <<
-        "/NodeList/" << jammerNodes.Get (nJammer - i)->GetId () <<
-        "/$ns3::MobilityModel/CourseChange";
-    }
-    */
 
     Config::Connect (oss.str (), MakeCallback(&CourseChange));
 
@@ -158,14 +178,33 @@ main (int argc, char *argv[])
 
 
     // Simulator stop
-    Simulator::Stop (Seconds (10.0));
+    Simulator::Stop (Seconds (120.0));
 
 
 
 
     // Call my logger functions to test cmd input
     LogNodeContainer("jammerNodes",jammerNodes);
-    LogNodeContainer("bsr",bsr);
+    LogNodeContainer("bsrNodes",bsrNodes);
+
+
+
+
+
+    // Generate output for NetAnim - see for almost correct example repositorio.cedia.org.ec/bitstream/123456789/960/12/T12_Mobilityenns3_vf.pdf
+    AnimationInterface anim ("jammer-adhoc-animation.xml"); // Mandatory
+    anim.UpdateNodeDescription (jammerNodes.Get(0), "JAMMER");//Optional
+    anim.UpdateNodeColor (jammerNodes.Get(0), 0, 255, 0); // Optional (green)
+    anim.UpdateNodeSize (jammerNodes.Get(0)->GetId(),  xMax*.02,yMax*.02); // Optional (green)
+    anim.UpdateNodeDescription (bsrNodes.Get(0), "BSR");//Optional
+    anim.UpdateNodeColor (bsrNodes.Get(0), 200, 0, 0); // Optional (red)
+    anim.UpdateNodeSize (bsrNodes.Get(0)->GetId(), xMax*.05,yMax*.05); // Optional (green)
+    anim.EnablePacketMetadata (true); // Optional
+
+
+
+
+
 
 
     Simulator::Run ();
