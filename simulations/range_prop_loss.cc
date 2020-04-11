@@ -76,18 +76,15 @@ main (int argc, char *argv[])
     NodeContainer jammerNodes;
     jammerNodes.Create(nJammer);
     NetDeviceContainer jammer;
-    //jammer.Get(0)->SetNode(jammerNodes.Get(0));
 
     // Create Receiver Nodes
     NodeContainer bsrNodes;
     bsrNodes.Create(nBsr);
 
+
+
     // TODO: Construct PHY and channel helpers
-    //      -- What are appropriate helpers?
-    //      -- What makes sense for my model?
     //      -- PathLoss Model here?
-
-
     SpectrumChannelHelper spectrumChannelHelper = SpectrumChannelHelper::Default();
     // Propogation Loss Model https://www.nsnam.org/doxygen/classns3_1_1_log_distance_propagation_loss_model.html
     spectrumChannelHelper.AddPropagationLoss("ns3::LogDistancePropagationLossModel",
@@ -99,21 +96,16 @@ main (int argc, char *argv[])
 
     SpectrumPhyHelper phy;
     // How to get NetDeviceContaineer from SpectrumChannelHelper?
-    phy.SetChannel(spectrumChannelHelper.Create ());
-    // phy.Create() needs a Node and NetDevice as input, returns Ptr<SpectrumPhy>
-    //Ptr<SpectrumPhy> phyPtr = phy.Create(jammerNodes.Get(0),jammer;
+    phy.SetChannel(spectrumChannelHelper.Create());
+    //TODO: Get a Ptr<SpectrumPhy> as input to SpectrumSignalParameters
+    //Ptr<SpectrumPhy> phyPtr = phy.Create(jammerNodes.Get(0),jammer.Get(0));
 
-    //channelParams.txPhy = phy.Create(jammerNodes.Get(0),jammer.Get(0));
+
     /*
-    // channel.AddSpectrumPropagationLoss();        // TODO: Needed, but can wait
-    // channelHelper.SetPropagationDelay("1ms");    // TODO: Needed, but can wait
-
-
-
-    SpectrumSignalParameters channelParams = ns3::SpectrumSignalParameters();
-    channelParams.txPhy = phy.Create(jammerNodes.Get(0),jammer.Get(0));
-
+    channel.AddSpectrumPropagationLoss();        // TODO: Needed, but can wait
     */
+
+
     //ParabolicAntennaModel parabolicAntenna;
     ParabolicAntennaModel parabolicTxAntenna;
     parabolicTxAntenna.SetBeamwidth(60.0);         // defaul is 60
@@ -132,11 +124,14 @@ main (int argc, char *argv[])
     Ptr<SpectrumModel> ptrSpectrumModel = &spectrumModel;
     // Create SpectrumValue as input to SpectrumSignalParameters psd
     SpectrumValue txPsd = SpectrumValue(ptrSpectrumModel);
+
+
     // SpectrumSignalParameters as input to ______________
     SpectrumSignalParameters channelParams = ns3::SpectrumSignalParameters();
     channelParams.txAntenna = &parabolicTxAntenna;
-    //channelParams.txPhy = &phy;
-    // channelParams = (SpectrumSignalParameters){9999,,txAntenna,phy};
+    channelParams.psd = &txPsd;
+    //channelParams.txPhy = &phy; // need txPhy
+    channelParams.duration = Time(Seconds(99999));      // transmit the whole time
 
 
 
